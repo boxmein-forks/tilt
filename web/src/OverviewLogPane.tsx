@@ -66,6 +66,7 @@ let LogEnd = styled.div`
 
 let anser = new Anser()
 
+// Currently unused / placeholder if we want to implement text highlighting
 function newLineText(text: string, textToHighlight?: string): string {
   if (!textToHighlight) {
     return text
@@ -75,17 +76,14 @@ function newLineText(text: string, textToHighlight?: string): string {
   // Array of match indices
   // Wrap the highlighted text in `mark` elements
   // Escape the html of non-matches
-  // OR: maybe we can just escape everything and then add
 
-  // return textToHighlight.replaceAll(new RegExp(`(${textToHighlight})`, 'g'), "<mark>$1</mark>")
   return text
 }
 
 function newLineEl(
   line: LogLine,
   showManifestPrefix: boolean,
-  extraClasses: string[],
-  textToHighlight?: string
+  extraClasses: string[]
 ): Element {
   // console.log('newLineEle', line.spanId)
   let text = line.text
@@ -125,13 +123,10 @@ function newLineEl(
   let code = document.createElement("code")
   code.classList.add("LogPaneLine-content")
 
-  // TODO: Add search term mark logic here; not sure if search terms will need to be reset when they change
-  const textWithHighlight = newLineText(line.text, textToHighlight)
-
   // newline ensures this takes up at least one line
   let spacer = "\n"
   code.innerHTML = anser.linkify(
-    anser.ansiToHtml(anser.escapeForHtml(textWithHighlight) + spacer, {
+    anser.ansiToHtml(anser.escapeForHtml(line.text) + spacer, {
       use_classes: true,
     })
   )
@@ -420,16 +415,14 @@ export class OverviewLogComponent extends Component<OverviewLogComponentProps> {
     }
   }
 
-  // TODO: Consider when the filter term is interpretted as plain text or regex if that's the approach we go with
   matchesTermFilter(line: LogLine): boolean {
-    const filterTerm = this.props.filterSet.term
+    const { filterTerm } = this.props.filterSet.term
 
-    // If there's no term to filter by, consider everything a match
-    if (!filterTerm || filterTerm.length === 0) {
+    if (!filterTerm) {
       return true
     }
 
-    if (line.text && line.text.toLowerCase().includes(filterTerm)) {
+    if (line.text && filterTerm.test(line.text)) {
       return true
     }
 
@@ -670,12 +663,7 @@ export class OverviewLogComponent extends Component<OverviewLogComponentProps> {
       extraClasses.push("is-startOfAlert")
     }
 
-    let lineEl = newLineEl(
-      entry.line,
-      showManifestName,
-      extraClasses,
-      this.props.filterSet.term
-    )
+    let lineEl = newLineEl(entry.line, showManifestName, extraClasses)
     if (isStartOfAlert) {
       lineEl.appendChild(this.newAlertNavEl(entry.line))
     }

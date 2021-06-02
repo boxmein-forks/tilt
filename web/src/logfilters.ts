@@ -4,6 +4,11 @@ import { Location } from "history"
 import { useHistory } from "react-router"
 
 export const EMPTY_TERM = ""
+export const EMPTY_FILTER_TERM: FilterTerm = {
+  sourceTerm: EMPTY_TERM,
+  filterTerm: null,
+  invalid: false,
+}
 
 export enum FilterLevel {
   all = "",
@@ -25,17 +30,25 @@ export enum FilterSource {
   runtime = "runtime",
 }
 
-// The term could have more metadata associated with it
 interface FilterTerm {
-  type: "string" | "regex"
-  content: string | null
-  union: "include" | "exclude"
+  sourceTerm: string // Unmodified string input
+  filterTerm: RegExp | null // String input parsed into a RegExp, used for filtering
+  invalid: boolean // True if the string input cannot be parsed
 }
 
 export type FilterSet = {
   level: FilterLevel
   source: FilterSource
-  term?: string // Optional for now; Is an empty string an acceptable empty state?
+  term: FilterTerm
+}
+
+export function parseFilterTerm(term: string): RegExp | null {
+  if (!term) {
+    return null
+  }
+
+  // Filter terms are case-insensitive and can match multiple instances
+  return new RegExp(term, "gi")
 }
 
 // Infers filter set from the history React hook.
@@ -45,14 +58,15 @@ export function useFilterSet(): FilterSet {
 
 // The source of truth for log filters is the URL.
 // For example,
-// /r/(all)/overview?level=error&source=build
-// will only show errors from the build, not from the pod.
+// /r/(all)/overview?level=error&source=build&term=docker
+// will only show errors from the build, not from the pod,
+// and that include the string `docker`.
 export function filterSetFromLocation(l: Location): FilterSet {
   let params = new URLSearchParams(l.search)
-  let filters = {
+  let filters: FilterSet = {
     level: FilterLevel.all,
     source: FilterSource.all,
-    term: EMPTY_TERM,
+    term: EMPTY_FILTER_TERM,
   }
   switch (params.get("level")) {
     case FilterLevel.warn:
@@ -72,17 +86,23 @@ export function filterSetFromLocation(l: Location): FilterSet {
       break
   }
 
-  const filterTerm = params.get("term")
-  if (filterTerm) {
-    // TODO: Apply some form of term standardization, like lowercasing and trimming
-    filters.term = filterTerm.toLowerCase()
-  } else {
-    filters.term = EMPTY_TERM
+  const sourceTerm = params.get("term")
+  if (sourceTerm) {
+    filters.term = {
+      sourceTerm,
+      filterTerm: parseFilterTerm(sourceTerm),
+      invalid: false,
+    }
   }
 
   return filters
 }
 
 export function filterSetsEqual(a: FilterSet, b: FilterSet): boolean {
-  return a.source === b.source && a.level === b.level && a.term === b.term
+  const sourceEqual = a.source === b.source
+  const levelEqual = a.level === b.level
+  // Filter terms are case-insensitive, so we can ignore casing when comparing terms
+  const termEqual =
+    a.term.sourceTerm.toLowerCase() === b.term.sourceTerm.toLowerCase()
+  return sourceEqual && levelEqual && termEqual
 }
